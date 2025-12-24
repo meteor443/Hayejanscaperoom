@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="fa" dir="rtl" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>نوبت‌دهی اتاق فرار</title>
+  <script src="/_sdk/data_sdk.js"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      box-sizing: border-box;
+    }
+    
+    @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap');
+    
+    * {
+      font-family: 'Vazirmatn', sans-serif;
+    }
+  </style>
+  <style>@view-transition { navigation: auto; }</style>
+ </head>
+ <body class="h-full">
+  <div id="app" class="w-full h-full overflow-auto"></div>
+  <script>
+    const defaultConfig = {
+      background_color: "#0f172a",
+      surface_color: "#1e293b",
+      text_color: "#f1f5f9",
+      primary_action_color: "#8b5cf6",
+      secondary_action_color: "#64748b",
+      font_family: "Vazirmatn",
+      font_size: 16,
+      page_title: "نوبت‌دهی اتاق فرار",
+      scenario_name: "راز",
+      description_text: "یک ماجراجویی هیجان‌انگیز در انتظار شماست",
+      footer_text: "با تشکر از انتخاب شما"
+    };
+
+    let allBookings = [];
+    let currentDate = new Date().toISOString().split('T')[0];
+    
+    // ساعات کاری: 15, 17, 19, 21 (فاصله 2 ساعته)
+    const timeSlots = ['15:00', '17:00', '19:00', '21:00'];
+
+    const dataHandler = {
+      onDataChanged(data) {
+        allBookings = data;
+        renderUI();
+      }
+    };
+
+    async function initializeApp() {
+      const initResult = await window.dataSdk.init(dataHandler);
+      if (!initResult.isOk) {
+        console.error("خطا در راه‌اندازی سیستم");
+      }
+    }
+
+    function isSlotBooked(date, time) {
+      return allBookings.some(booking => 
+        booking.booking_date === date && booking.time_slot === time
+      );
+    }
+
+    function getBookingForSlot(date, time) {
+      return allBookings.find(booking => 
+        booking.booking_date === date && booking.time_slot === time
+      );
+    }
+
+    async function handleBooking(timeSlot) {
+      if (allBookings.length >= 999) {
+        showToast("حداکثر تعداد رزرو (999) به پایان رسیده است", "error");
+        return;
+      }
+
+      const modal = document.getElementById('bookingModal');
+      const form = document.getElementById('bookingForm');
+      const timeSlotDisplay = document.getElementById('selectedTimeSlot');
+      
+      timeSlotDisplay.textContent = `${timeSlot} - ${currentDate}`;
+      form.dataset.timeSlot = timeSlot;
+      
+      modal.classList.remove('hidden');
+    }
+
+    function closeModal() {
+      const modal = document.getElementById('bookingModal');
+      modal.classList.add('hidden');
+      document.getElementById('bookingForm').reset();
+    }
+
+    async function submitBooking(event) {
+      event.preventDefault();
+      
+      const submitBtn = document.getElementById('submitBtn');
+      const originalText = submitBtn.textContent;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'در حال ثبت...';
+
+      const form = event.target;
+      const timeSlot = form.dataset.timeSlot;
+      
+      const bookingData = {
+        time_slot: timeSlot,
+        customer_name: form.customerName.value.trim(),
+        phone_number: form.phoneNumber.value.trim(),
+        team_size: parseInt(form.teamSize.value),
+        booking_date: currentDate
+      };
+
+      const result = await window.dataSdk.create(bookingData);
+      
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
+
+      if (result.isOk) {
+        closeModal();
+        showToast("رزرو با موفقیت ثبت شد", "success");
+      } else {
+        showToast("خطا در ثبت رزرو. لطفا دوباره تلاش کنید", "error");
+      }
+    }
+
+    async function cancelBooking(booking) {
+      const confirmSection = document.getElementById(`confirm-${booking.__backendId}`);
+      confirmSection.classList.remove('hidden');
+    }
+
+    async function confirmCancelBooking(booking) {
+      const cancelBtn = document.getElementById(`cancel-btn-${booking.__backendId}`);
+      const originalText = cancelBtn.textContent;
+      cancelBtn.disabled = true;
+      cancelBtn.textContent = 'در حال لغو...';
+
+      const result = await window.dataSdk.delete(booking);
+      
+      cancelBtn.disabled = false;
+      cancelBtn.textContent = originalText;
+
+      if (result.isOk) {
+        showToast("رزرو لغو شد", "success");
+      } else {
+        showToast("خطا در لغو رزرو", "error");
+      }
+    }
+
+    function hideConfirm(bookingId) {
+      const confirmSection = document.getElementById(`confirm-${bookingId}`);
+      confirmSection.classList.add('hidden');
+    }
+
+    function changeDate(direction) {
+      const date = new Date(currentDate);
+      date.setDate(date.getDate() + direction);
+      currentDate = date.toISOString().split('T')[0];
+      renderUI();
+    }
+
+    function showToast(message, type) {
+      const toast = document.createElement('div');
+      const bgColor = type === 'success' ? '#10b981' : '#ef4444';
+      toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${bgColor};
+        color: white;
+        padding: 16px 24px;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        z-index: 1000;
+        animation: slideIn 0.3s ease-out;
+      `;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    function formatDate(dateStr) {
+      const date = new Date(dateStr);
+      const options = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
+      return date.toLocaleDateString('fa-IR', options);
+    }
+
+    async function onConfigChange(config) {
+      const baseSize = config.font_size || defaultConfig.font_size;
+      const customFont = config.font_family || defaultConfig.font_family;
+      const baseFontStack = 'Vazirmatn, sans-serif';
+      
+      document.body.style.background = config.background_color || defaultConfig.background_color;
+      
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes slideIn {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes slideOut {
+          from { transform: translateX(0); opacity: 1; }
+          to { transform: translateX(100%); opacity: 0; }
+        }
+      `;
+      document.head.appendChild(style);
+      
+      renderUI();
+    }
+
+    function renderUI() {
+      const config = window.elementSdk?.config || defaultConfig;
+      const baseSize = config.font_size || defaultConfig.font_size;
+      const customFont = config.font_family || defaultConfig.font_family;
+      const baseFontStack = 'Vazirmatn, sans-serif';
+      const fontFamily = `${customFont}, ${baseFontStack}`;
+      
+      const backgroundColor = config.background_color || defaultConfig.background_color;
+      const surfaceColor = config.surface_color || defaultConfig.surface_color;
+      const textColor = config.text_color || defaultConfig.text_color;
+      const primaryColor = config.primary_action_color || defaultConfig.primary_action_color;
+      const secondaryColor = config.secondary_action_color || defaultConfig.secondary_action_color;
+      
+      const pageTitle = config.page_title || defaultConfig.page_title;
+      const scenarioName = config.scenario_name || defaultConfig.scenario_name;
+      const descriptionText = config.description_text || defaultConfig.description_text;
+      const footerText = config.footer_text || defaultConfig.footer_text;
+
+      const app = document.getElementById('app');
+      app.style.background = backgroundColor;
+      
+      app.innerHTML = `
+        <div class="w-full min-h-full px-6 py-8">
+          <div class="max-w-6xl mx-auto">
+            <!-- Header -->
+            <div class="text-center mb-8">
+              <h1 class="mb-2" style="font-family: ${fontFamily}; font-size: ${baseSize * 2}px; color: ${textColor}; font-weight: 700;">${pageTitle}</h1>
+              <div class="flex items-center justify-center gap-2 mb-3">
+                <div style="background: ${primaryColor}; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: ${baseSize * 1.2}px;">🔐</div>
+                <p style="font-family: ${fontFamily}; font-size: ${baseSize * 1.5}px; color: ${textColor}; font-weight: 600;">سناریو: ${scenarioName}</p>
+              </div>
+              <p style="font-family: ${fontFamily}; font-size: ${baseSize}px; color: ${textColor}; opacity: 0.8;">${descriptionText}</p>
+            </div>
+
+            <!-- Date Navigation -->
+            <div class="flex items-center justify-center gap-4 mb-8">
+              <button onclick="changeDate(-1)" class="px-4 py-2 rounded-lg transition-all" style="background: ${surfaceColor}; color: ${textColor}; font-family: ${fontFamily}; font-size: ${baseSize}px; font-weight: 500; border: 2px solid ${secondaryColor};">
+                ← روز قبل
+              </button>
+              <div class="px-6 py-3 rounded-lg" style="background: ${surfaceColor}; border: 2px solid ${primaryColor};">
+                <p style="font-family: ${fontFamily}; font-size: ${baseSize * 1.1}px; color: ${textColor}; font-weight: 600;">${formatDate(currentDate)}</p>
+              </div>
+              <button onclick="changeDate(1)" class="px-4 py-2 rounded-lg transition-all" style="background: ${surfaceColor}; color: ${textColor}; font-family: ${fontFamily}; font-size: ${baseSize}px; font-weight: 500; border: 2px solid ${secondaryColor};">
+                روز بعد →
+              </button>
+            </div>
+
+            <!-- Time Slots -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              ${timeSlots.map(timeSlot => {
+                const isBooked = isSlotBooked(currentDate, timeSlot);
+                const booking = getBookingForSlot(currentDate, timeSlot);
+                
+                return `
+                  <div class="rounded-xl p-6 transition-all" style="background: ${surfaceColor}; border: 2px solid ${isBooked ? secondaryColor : primaryColor};">
+                    <div class="flex items-center justify-between mb-4">
+                      <div class="flex items-center gap-3">
+                        <div style="font-size: ${baseSize * 1.5}px;">${isBooked ? '❌' : '⏰'}</div>
+                        <div>
+                          <p style="font-family: ${fontFamily}; font-size: ${baseSize * 1.3}px; color: ${textColor}; font-weight: 700;">${timeSlot}</p>
+                          <p style="font-family: ${fontFamily}; font-size: ${baseSize * 0.85}px; color: ${textColor}; opacity: 0.7;">مدت: 2 ساعت</p>
+                        </div>
+                      </div>
+                      <div class="px-3 py-1 rounded-full" style="background: ${isBooked ? secondaryColor : primaryColor}20;">
+                        <p style="font-family: ${fontFamily}; font-size: ${baseSize * 0.85}px; color: ${isBooked ? secondaryColor : primaryColor}; font-weight: 600;">
+                          ${isBooked ? 'رزرو شده' : 'آزاد'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    ${isBooked ? `
+                      <div class="pt-4" style="border-top: 1px solid ${textColor}30;">
+                        <div class="space-y-2 mb-3">
+                          <p style="font-family: ${fontFamily}; font-size: ${baseSize * 0.9}px; color: ${textColor};">
+                            <span style="opacity: 0.7;">👤 نام:</span>
+                            <span style="font-weight: 600; margin-right: 8px;">${booking.customer_name}</span>
+                          </p>
+                          <p style="font-family: ${fontFamily}; font-size: ${baseSize * 0.9}px; color: ${textColor};">
+                            <span style="opacity: 0.7;">📞 تلفن:</span>
+                            <span style="font-weight: 600; margin-right: 8px;">${booking.phone_number}</span>
+                          </p>
+                          <p style="font-family: ${fontFamily}; font-size: ${baseSize * 0.9}px; color: ${textColor};">
+                            <span style="opacity: 0.7;">👥 تعداد:</span>
+                            <span style="font-weight: 600; margin-right: 8px;">${booking.team_size} نفر</span>
+                          </p>
+                        </div>
+                        
+                        <div id="confirm-${booking.__backendId}" class="hidden mt-3 p-3 rounded-lg" style="background: ${backgroundColor};">
+                          <p style="font-family: ${fontFamily}; font-size: ${baseSize * 0.85}px; color: ${textColor}; margin-bottom: 8px;">آیا مطمئن هستید؟</p>
+                          <div class="flex gap-2">
+                            <button id="cancel-btn-${booking.__backendId}" onclick="confirmCancelBooking(${JSON.stringify(booking).replace(/"/g, '&quot;')})" class="flex-1 px-3 py-2 rounded-lg transition-all" style="background: #ef4444; color: white; font-family: ${fontFamily}; font-size: ${baseSize * 0.85}px; font-weight: 500;">
+                              بله، لغو شود
+                            </button>
+                            <button onclick="hideConfirm('${booking.__backendId}')" class="flex-1 px-3 py-2 rounded-lg transition-all" style="background: ${secondaryColor}; color: ${textColor}; font-family: ${fontFamily}; font-size: ${baseSize * 0.85}px; font-weight: 500;">
+                              انصراف
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <button onclick="cancelBooking(${JSON.stringify(booking).replace(/"/g, '&quot;')})" class="w-full px-4 py-2 rounded-lg mt-3 transition-all" style="background: ${secondaryColor}; color: ${textColor}; font-family: ${fontFamily}; font-size: ${baseSize * 0.9}px; font-weight: 500;">
+                          لغو رزرو
+                        </button>
+                      </div>
+                    ` : `
+                      <button onclick="handleBooking('${timeSlot}')" class="w-full px-4 py-3 rounded-lg transition-all" style="background: ${primaryColor}; color: white; font-family: ${fontFamily}; font-size: ${baseSize}px; font-weight: 600;">
+                        رزرو این سانس
+                      </button>
+                    `}
+                  </div>
+                `;
+              }).join('')}
+            </div>
+
+            <!-- Footer -->
+            <div class="text-center pt-6" style="border-top: 1px solid ${textColor}20;">
+              <p style="font-family: ${fontFamily}; font-size: ${baseSize * 0.9}px; color: ${textColor}; opacity: 0.7;">${footerText}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Booking Modal -->
+        <div id="bookingModal" class="hidden fixed inset-0 flex items-center justify-center p-4" style="background: rgba(0,0,0,0.7); z-index: 50;">
+          <div class="w-full max-w-md rounded-xl p-6" style="background: ${surfaceColor};">
+            <div class="flex items-center justify-between mb-6">
+              <h2 style="font-family: ${fontFamily}; font-size: ${baseSize * 1.5}px; color: ${textColor}; font-weight: 700;">ثبت رزرو</h2>
+              <button onclick="closeModal()" style="color: ${textColor}; font-size: ${baseSize * 1.5}px;">✕</button>
+            </div>
+            
+            <div class="mb-6 p-3 rounded-lg" style="background: ${primaryColor}20; border: 1px solid ${primaryColor};">
+              <p id="selectedTimeSlot" style="font-family: ${fontFamily}; font-size: ${baseSize}px; color: ${textColor}; font-weight: 600; text-align: center;"></p>
+            </div>
+
+            <form id="bookingForm" onsubmit="submitBooking(event)" class="space-y-4">
+              <div>
+                <label for="customerName" style="font-family: ${fontFamily}; font-size: ${baseSize * 0.9}px; color: ${textColor}; display: block; margin-bottom: 8px; font-weight: 500;">نام و نام خانوادگی</label>
+                <input type="text" id="customerName" name="customerName" required class="w-full px-4 py-3 rounded-lg" style="background: ${backgroundColor}; color: ${textColor}; border: 2px solid ${primaryColor}; font-family: ${fontFamily}; font-size: ${baseSize}px;" placeholder="نام خود را وارد کنید">
+              </div>
+
+              <div>
+                <label for="phoneNumber" style="font-family: ${fontFamily}; font-size: ${baseSize * 0.9}px; color: ${textColor}; display: block; margin-bottom: 8px; font-weight: 500;">شماره تماس</label>
+                <input type="tel" id="phoneNumber" name="phoneNumber" required pattern="[0-9]{11}" class="w-full px-4 py-3 rounded-lg" style="background: ${backgroundColor}; color: ${textColor}; border: 2px solid ${primaryColor}; font-family: ${fontFamily}; font-size: ${baseSize}px;" placeholder="09123456789">
+              </div>
+
+              <div>
+                <label for="teamSize" style="font-family: ${fontFamily}; font-size: ${baseSize * 0.9}px; color: ${textColor}; display: block; margin-bottom: 8px; font-weight: 500;">تعداد نفرات</label>
+                <select id="teamSize" name="teamSize" required class="w-full px-4 py-3 rounded-lg" style="background: ${backgroundColor}; color: ${textColor}; border: 2px solid ${primaryColor}; font-family: ${fontFamily}; font-size: ${baseSize}px;">
+                  <option value="2">2 نفر</option>
+                  <option value="3">3 نفر</option>
+                  <option value="4">4 نفر</option>
+                  <option value="5">5 نفر</option>
+                  <option value="6">6 نفر</option>
+                  <option value="7">7 نفر</option>
+                  <option value="8">8 نفر</option>
+                </select>
+              </div>
+
+              <div class="flex gap-3 pt-2">
+                <button type="submit" id="submitBtn" class="flex-1 px-4 py-3 rounded-lg transition-all" style="background: ${primaryColor}; color: white; font-family: ${fontFamily}; font-size: ${baseSize}px; font-weight: 600;">
+                  تایید رزرو
+                </button>
+                <button type="button" onclick="closeModal()" class="px-4 py-3 rounded-lg transition-all" style="background: ${secondaryColor}; color: ${textColor}; font-family: ${fontFamily}; font-size: ${baseSize}px; font-weight: 500;">
+                  انصراف
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      `;
+    }
+
+    // Initialize SDK
+    if (window.elementSdk) {
+      window.elementSdk.init({
+        defaultConfig,
+        onConfigChange,
+        mapToCapabilities: (config) => ({
+          recolorables: [
+            {
+              get: () => config.background_color || defaultConfig.background_color,
+              set: (value) => {
+                config.background_color = value;
+                window.elementSdk.setConfig({ background_color: value });
+              }
+            },
+            {
+              get: () => config.surface_color || defaultConfig.surface_color,
+              set: (value) => {
+                config.surface_color = value;
+                window.elementSdk.setConfig({ surface_color: value });
+              }
+            },
+            {
+              get: () => config.text_color || defaultConfig.text_color,
+              set: (value) => {
+                config.text_color = value;
+                window.elementSdk.setConfig({ text_color: value });
+              }
+            },
+            {
+              get: () => config.primary_action_color || defaultConfig.primary_action_color,
+              set: (value) => {
+                config.primary_action_color = value;
+                window.elementSdk.setConfig({ primary_action_color: value });
+              }
+            },
+            {
+              get: () => config.secondary_action_color || defaultConfig.secondary_action_color,
+              set: (value) => {
+                config.secondary_action_color = value;
+                window.elementSdk.setConfig({ secondary_action_color: value });
+              }
+            }
+          ],
+          borderables: [],
+          fontEditable: {
+            get: () => config.font_family || defaultConfig.font_family,
+            set: (value) => {
+              config.font_family = value;
+              window.elementSdk.setConfig({ font_family: value });
+            }
+          },
+          fontSizeable: {
+            get: () => config.font_size || defaultConfig.font_size,
+            set: (value) => {
+              config.font_size = value;
+              window.elementSdk.setConfig({ font_size: value });
+            }
+          }
+        }),
+        mapToEditPanelValues: (config) => new Map([
+          ["page_title", config.page_title || defaultConfig.page_title],
+          ["scenario_name", config.scenario_name || defaultConfig.scenario_name],
+          ["description_text", config.description_text || defaultConfig.description_text],
+          ["footer_text", config.footer_text || defaultConfig.footer_text]
+        ])
+      });
+    }
+
+    // Initialize app
+    initializeApp();
+  </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9b313c0d0138e898',t:'MTc2NjU5MTIxOC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
