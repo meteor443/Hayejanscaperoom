@@ -17,6 +17,29 @@
     * {
       font-family: 'Vazirmatn', sans-serif;
     }
+    
+    @keyframes flicker {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.8; }
+    }
+    
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-10px); }
+    }
+    
+    .candle-glow {
+      animation: flicker 3s infinite;
+    }
+    
+    .pulse-shadow {
+      animation: pulse 2s infinite;
+    }
   </style>
   <style>@view-transition { navigation: auto; }</style>
  </head>
@@ -24,17 +47,17 @@
   <div id="app" class="w-full h-full overflow-auto"></div>
   <script>
     const defaultConfig = {
-      background_color: "#0f172a",
-      surface_color: "#1e293b",
+      background_color: "#0a0a0a",
+      surface_color: "#1a0f0f",
       text_color: "#f1f5f9",
-      primary_action_color: "#8b5cf6",
-      secondary_action_color: "#64748b",
+      primary_action_color: "#dc2626",
+      secondary_action_color: "#7c2d12",
       font_family: "Vazirmatn",
       font_size: 16,
       page_title: "نوبت‌دهی اتاق فرار",
       scenario_name: "راز",
-      description_text: "یک ماجراجویی هیجان‌انگیز در انتظار شماست",
-      footer_text: "با تشکر از انتخاب شما"
+      description_text: "آیا جرات دارید وارد تاریکی شوید؟ راز منتظر کسانی است که از مرگ نمی‌ترسند",
+      footer_text: "��ا تشکر از انتخاب شما"
     };
 
     let allBookings = [];
@@ -69,7 +92,7 @@
       );
     }
 
-    async function handleBooking(timeSlot) {
+    window.handleBooking = function(timeSlot) {
       if (allBookings.length >= 999) {
         showToast("حداکثر تعداد رزرو (999) به پایان رسیده است", "error");
         return;
@@ -85,13 +108,13 @@
       modal.classList.remove('hidden');
     }
 
-    function closeModal() {
+    window.closeModal = function() {
       const modal = document.getElementById('bookingModal');
       modal.classList.add('hidden');
       document.getElementById('bookingForm').reset();
     }
 
-    async function submitBooking(event) {
+    window.submitBooking = async function(event) {
       event.preventDefault();
       
       const submitBtn = document.getElementById('submitBtn');
@@ -110,25 +133,31 @@
         booking_date: currentDate
       };
 
-      const result = await window.dataSdk.create(bookingData);
-      
-      submitBtn.disabled = false;
-      submitBtn.textContent = originalText;
+      try {
+        const result = await window.dataSdk.create(bookingData);
+        
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
 
-      if (result.isOk) {
-        closeModal();
-        showToast("رزرو با موفقیت ثبت شد", "success");
-      } else {
+        if (result.isOk) {
+          closeModal();
+          showToast("رزرو با موفقیت ثبت شد", "success");
+        } else {
+          showToast("خطا در ثبت رزرو. لطفا دوباره تلاش کنید", "error");
+        }
+      } catch (error) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
         showToast("خطا در ثبت رزرو. لطفا دوباره تلاش کنید", "error");
       }
     }
 
-    async function cancelBooking(booking) {
+    window.cancelBooking = function(booking) {
       const confirmSection = document.getElementById(`confirm-${booking.__backendId}`);
       confirmSection.classList.remove('hidden');
     }
 
-    async function confirmCancelBooking(booking) {
+    window.confirmCancelBooking = async function(booking) {
       const cancelBtn = document.getElementById(`cancel-btn-${booking.__backendId}`);
       const originalText = cancelBtn.textContent;
       cancelBtn.disabled = true;
@@ -146,12 +175,12 @@
       }
     }
 
-    function hideConfirm(bookingId) {
+    window.hideConfirm = function(bookingId) {
       const confirmSection = document.getElementById(`confirm-${bookingId}`);
       confirmSection.classList.add('hidden');
     }
 
-    function changeDate(direction) {
+    window.changeDate = function(direction) {
       const date = new Date(currentDate);
       date.setDate(date.getDate() + direction);
       currentDate = date.toISOString().split('T')[0];
@@ -184,8 +213,60 @@
 
     function formatDate(dateStr) {
       const date = new Date(dateStr);
-      const options = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
-      return date.toLocaleDateString('fa-IR', options);
+      
+      // تبدیل میلادی به شمسی
+      const gYear = date.getFullYear();
+      const gMonth = date.getMonth() + 1;
+      const gDay = date.getDate();
+      
+      const jDate = gregorianToJalali(gYear, gMonth, gDay);
+      
+      const weekDays = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
+      const monthNames = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
+      
+      const weekDay = weekDays[date.getDay()];
+      const monthName = monthNames[jDate.month - 1];
+      
+      return `${weekDay} ${jDate.day} ${monthName} ${jDate.year}`;
+    }
+    
+    function gregorianToJalali(gYear, gMonth, gDay) {
+      const gDaysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+      const jDaysInMonth = [31, 31, 31, 31, 31, 31, 30, 30, 30, 30, 30, 29];
+      
+      let gy = gYear - 1600;
+      let gm = gMonth - 1;
+      let gd = gDay - 1;
+      
+      let gDayNo = 365 * gy + Math.floor((gy + 3) / 4) - Math.floor((gy + 99) / 100) + Math.floor((gy + 399) / 400);
+      
+      for (let i = 0; i < gm; ++i)
+        gDayNo += gDaysInMonth[i];
+      if (gm > 1 && ((gy % 4 === 0 && gy % 100 !== 0) || (gy % 400 === 0)))
+        gDayNo++;
+      gDayNo += gd;
+      
+      let jDayNo = gDayNo - 79;
+      
+      let jNp = Math.floor(jDayNo / 12053);
+      jDayNo %= 12053;
+      
+      let jy = 979 + 33 * jNp + 4 * Math.floor(jDayNo / 1461);
+      jDayNo %= 1461;
+      
+      if (jDayNo >= 366) {
+        jy += Math.floor((jDayNo - 1) / 365);
+        jDayNo = (jDayNo - 1) % 365;
+      }
+      
+      let jm = 0;
+      for (let i = 0; i < 11 && jDayNo >= jDaysInMonth[i]; ++i) {
+        jDayNo -= jDaysInMonth[i];
+        jm++;
+      }
+      let jd = jDayNo + 1;
+      
+      return { year: jy, month: jm + 1, day: jd };
     }
 
     async function onConfigChange(config) {
@@ -228,19 +309,55 @@
         <div class="w-full min-h-full px-6 py-8">
           <div class="max-w-6xl mx-auto">
             <!-- Header -->
-            <div class="text-center mb-8">
-              <h1 class="mb-2" style="font-family: ${fontFamily}; font-size: ${baseSize * 2}px; color: ${textColor}; font-weight: 700;">${pageTitle}</h1>
-              <div class="flex items-center justify-center gap-2 mb-3">
-                <div style="background: ${primaryColor}; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: ${baseSize * 1.2}px;">🔐</div>
-                <p style="font-family: ${fontFamily}; font-size: ${baseSize * 1.5}px; color: ${textColor}; font-weight: 600;">سناریو: ${scenarioName}</p>
+            <div class="text-center mb-8 relative">
+              <!-- Skull decoration -->
+              <div class="flex justify-center gap-8 mb-4">
+                <div class="candle-glow" style="font-size: ${baseSize * 3}px;">🕯️</div>
+                <div class="pulse-shadow" style="font-size: ${baseSize * 4}px;">💀</div>
+                <div class="candle-glow" style="font-size: ${baseSize * 3}px;">🕯️</div>
               </div>
+              
+              <h1 class="mb-2" style="font-family: ${fontFamily}; font-size: ${baseSize * 2}px; color: ${textColor}; font-weight: 700; text-shadow: 0 0 20px ${primaryColor}80;">${pageTitle}</h1>
+              
+              <!-- Horror theme icons -->
+              <div class="flex items-center justify-center gap-2 mb-3 flex-wrap">
+                <div style="font-size: ${baseSize * 1.2}px;">⚰️</div>
+                <div class="pulse-shadow" style="background: ${primaryColor}; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: ${baseSize * 1.5}px; box-shadow: 0 0 20px ${primaryColor};">🔐</div>
+                <p style="font-family: ${fontFamily}; font-size: ${baseSize * 1.5}px; color: ${textColor}; font-weight: 600;">سناریو: ${scenarioName}</p>
+                <div style="font-size: ${baseSize * 1.2}px;">⚰️</div>
+              </div>
+              
+              <!-- Spooky elements -->
+              <div class="flex justify-center gap-3 mb-3" style="opacity: 0.6;">
+                <span style="font-size: ${baseSize * 1.1}px;">🦇</span>
+                <span style="font-size: ${baseSize * 1.1}px;">🕷️</span>
+                <span style="font-size: ${baseSize * 1.1}px;">👻</span>
+                <span style="font-size: ${baseSize * 1.1}px;">🕸️</span>
+                <span style="font-size: ${baseSize * 1.1}px;">🦇</span>
+              </div>
+              
               <p style="font-family: ${fontFamily}; font-size: ${baseSize}px; color: ${textColor}; opacity: 0.8;">${descriptionText}</p>
+              
+              <!-- Blood drip effect -->
+              <div style="margin-top: 12px; font-size: ${baseSize * 1.5}px; opacity: 0.7;">🩸🩸🩸</div>
             </div>
+
+            <!-- Booking Stats -->
+            ${allBookings.filter(b => b.booking_date === currentDate).length > 0 ? `
+              <div class="mb-6 p-4 rounded-xl" style="background: ${surfaceColor}; border: 2px solid ${primaryColor};">
+                <div class="flex items-center justify-center gap-3">
+                  <span style="font-size: ${baseSize * 1.5}px;">📊</span>
+                  <p style="font-family: ${fontFamily}; font-size: ${baseSize}px; color: ${textColor}; font-weight: 600;">
+                    تعداد رزرو امروز: <span style="color: ${primaryColor}; font-size: ${baseSize * 1.2}px;">${allBookings.filter(b => b.booking_date === currentDate).length}</span> از ${timeSlots.length} سانس
+                  </p>
+                </div>
+              </div>
+            ` : ''}
 
             <!-- Date Navigation -->
             <div class="flex items-center justify-center gap-4 mb-8">
               <button onclick="changeDate(-1)" class="px-4 py-2 rounded-lg transition-all" style="background: ${surfaceColor}; color: ${textColor}; font-family: ${fontFamily}; font-size: ${baseSize}px; font-weight: 500; border: 2px solid ${secondaryColor};">
-                ← روز قبل
+                ← ��وز قبل
               </button>
               <div class="px-6 py-3 rounded-lg" style="background: ${surfaceColor}; border: 2px solid ${primaryColor};">
                 <p style="font-family: ${fontFamily}; font-size: ${baseSize * 1.1}px; color: ${textColor}; font-weight: 600;">${formatDate(currentDate)}</p>
@@ -254,57 +371,27 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               ${timeSlots.map(timeSlot => {
                 const isBooked = isSlotBooked(currentDate, timeSlot);
-                const booking = getBookingForSlot(currentDate, timeSlot);
                 
                 return `
                   <div class="rounded-xl p-6 transition-all" style="background: ${surfaceColor}; border: 2px solid ${isBooked ? secondaryColor : primaryColor};">
                     <div class="flex items-center justify-between mb-4">
                       <div class="flex items-center gap-3">
-                        <div style="font-size: ${baseSize * 1.5}px;">${isBooked ? '❌' : '⏰'}</div>
+                        <div class="pulse-shadow" style="font-size: ${baseSize * 2}px;">${isBooked ? '☠️' : '👁️'}</div>
                         <div>
                           <p style="font-family: ${fontFamily}; font-size: ${baseSize * 1.3}px; color: ${textColor}; font-weight: 700;">${timeSlot}</p>
-                          <p style="font-family: ${fontFamily}; font-size: ${baseSize * 0.85}px; color: ${textColor}; opacity: 0.7;">مدت: 2 ساعت</p>
+                          <p style="font-family: ${fontFamily}; font-size: ${baseSize * 0.85}px; color: ${textColor}; opacity: 0.7;">⏳ مدت: 2 ساعت</p>
                         </div>
                       </div>
-                      <div class="px-3 py-1 rounded-full" style="background: ${isBooked ? secondaryColor : primaryColor}20;">
+                      <div class="px-3 py-1 rounded-full" style="background: ${isBooked ? secondaryColor : primaryColor}20; border: 1px solid ${isBooked ? secondaryColor : primaryColor};">
                         <p style="font-family: ${fontFamily}; font-size: ${baseSize * 0.85}px; color: ${isBooked ? secondaryColor : primaryColor}; font-weight: 600;">
-                          ${isBooked ? 'رزرو شده' : 'آزاد'}
+                          ${isBooked ? '🔒 رزرو شده' : '🗝️ آزاد'}
                         </p>
                       </div>
                     </div>
                     
                     ${isBooked ? `
-                      <div class="pt-4" style="border-top: 1px solid ${textColor}30;">
-                        <div class="space-y-2 mb-3">
-                          <p style="font-family: ${fontFamily}; font-size: ${baseSize * 0.9}px; color: ${textColor};">
-                            <span style="opacity: 0.7;">👤 نام:</span>
-                            <span style="font-weight: 600; margin-right: 8px;">${booking.customer_name}</span>
-                          </p>
-                          <p style="font-family: ${fontFamily}; font-size: ${baseSize * 0.9}px; color: ${textColor};">
-                            <span style="opacity: 0.7;">📞 تلفن:</span>
-                            <span style="font-weight: 600; margin-right: 8px;">${booking.phone_number}</span>
-                          </p>
-                          <p style="font-family: ${fontFamily}; font-size: ${baseSize * 0.9}px; color: ${textColor};">
-                            <span style="opacity: 0.7;">👥 تعداد:</span>
-                            <span style="font-weight: 600; margin-right: 8px;">${booking.team_size} نفر</span>
-                          </p>
-                        </div>
-                        
-                        <div id="confirm-${booking.__backendId}" class="hidden mt-3 p-3 rounded-lg" style="background: ${backgroundColor};">
-                          <p style="font-family: ${fontFamily}; font-size: ${baseSize * 0.85}px; color: ${textColor}; margin-bottom: 8px;">آیا مطمئن هستید؟</p>
-                          <div class="flex gap-2">
-                            <button id="cancel-btn-${booking.__backendId}" onclick="confirmCancelBooking(${JSON.stringify(booking).replace(/"/g, '&quot;')})" class="flex-1 px-3 py-2 rounded-lg transition-all" style="background: #ef4444; color: white; font-family: ${fontFamily}; font-size: ${baseSize * 0.85}px; font-weight: 500;">
-                              بله، لغو شود
-                            </button>
-                            <button onclick="hideConfirm('${booking.__backendId}')" class="flex-1 px-3 py-2 rounded-lg transition-all" style="background: ${secondaryColor}; color: ${textColor}; font-family: ${fontFamily}; font-size: ${baseSize * 0.85}px; font-weight: 500;">
-                              انصراف
-                            </button>
-                          </div>
-                        </div>
-                        
-                        <button onclick="cancelBooking(${JSON.stringify(booking).replace(/"/g, '&quot;')})" class="w-full px-4 py-2 rounded-lg mt-3 transition-all" style="background: ${secondaryColor}; color: ${textColor}; font-family: ${fontFamily}; font-size: ${baseSize * 0.9}px; font-weight: 500;">
-                          لغو رزرو
-                        </button>
+                      <div class="pt-4 text-center" style="border-top: 1px solid ${textColor}30;">
+                        <p style="font-family: ${fontFamily}; font-size: ${baseSize * 0.9}px; color: ${textColor}; opacity: 0.7;">این سانس قبلاً رزرو شده است</p>
                       </div>
                     ` : `
                       <button onclick="handleBooking('${timeSlot}')" class="w-full px-4 py-3 rounded-lg transition-all" style="background: ${primaryColor}; color: white; font-family: ${fontFamily}; font-size: ${baseSize}px; font-weight: 600;">
@@ -317,27 +404,46 @@
             </div>
 
             <!-- Footer -->
-            <div class="text-center pt-6" style="border-top: 1px solid ${textColor}20;">
+            <div class="text-center pt-6" style="border-top: 2px solid ${textColor}20;">
+              <div class="flex justify-center gap-3 mb-2" style="opacity: 0.5;">
+                <span style="font-size: ${baseSize * 1.2}px;">🕸️</span>
+                <span style="font-size: ${baseSize * 1.2}px;">🦇</span>
+                <span style="font-size: ${baseSize * 1.2}px;">👻</span>
+                <span style="font-size: ${baseSize * 1.2}px;">🦇</span>
+                <span style="font-size: ${baseSize * 1.2}px;">🕸️</span>
+              </div>
               <p style="font-family: ${fontFamily}; font-size: ${baseSize * 0.9}px; color: ${textColor}; opacity: 0.7;">${footerText}</p>
+              <div class="candle-glow mt-3" style="font-size: ${baseSize * 1.5}px;">���️</div>
             </div>
           </div>
         </div>
 
         <!-- Booking Modal -->
-        <div id="bookingModal" class="hidden fixed inset-0 flex items-center justify-center p-4" style="background: rgba(0,0,0,0.7); z-index: 50;">
-          <div class="w-full max-w-md rounded-xl p-6" style="background: ${surfaceColor};">
-            <div class="flex items-center justify-between mb-6">
-              <h2 style="font-family: ${fontFamily}; font-size: ${baseSize * 1.5}px; color: ${textColor}; font-weight: 700;">ثبت رزرو</h2>
-              <button onclick="closeModal()" style="color: ${textColor}; font-size: ${baseSize * 1.5}px;">✕</button>
+        <div id="bookingModal" class="hidden fixed inset-0 flex items-center justify-center p-4" style="background: rgba(0,0,0,0.9); z-index: 50;">
+          <div class="w-full max-w-md rounded-xl p-6 relative" style="background: ${surfaceColor}; border: 2px solid ${primaryColor}; box-shadow: 0 0 30px ${primaryColor}50;">
+            <!-- Decorative skulls -->
+            <div class="absolute -top-5 left-1/2 transform -translate-x-1/2" style="font-size: ${baseSize * 2.5}px;">
+              💀
             </div>
             
-            <div class="mb-6 p-3 rounded-lg" style="background: ${primaryColor}20; border: 1px solid ${primaryColor};">
+            <div class="flex items-center justify-between mb-6">
+              <h2 style="font-family: ${fontFamily}; font-size: ${baseSize * 1.5}px; color: ${textColor}; font-weight: 700;">📜 ثبت رزرو</h2>
+              <button onclick="closeModal()" style="color: ${textColor}; font-size: ${baseSize * 1.5}px; background: ${primaryColor}30; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">✕</button>
+            </div>
+            
+            <div class="flex justify-center gap-2 mb-4" style="opacity: 0.6;">
+              <span style="font-size: ${baseSize}px;">🕷️</span>
+              <span style="font-size: ${baseSize}px;">🕸️</span>
+              <span style="font-size: ${baseSize}px;">🕷️</span>
+            </div>
+            
+            <div class="mb-6 p-3 rounded-lg" style="background: ${primaryColor}20; border: 2px solid ${primaryColor};">
               <p id="selectedTimeSlot" style="font-family: ${fontFamily}; font-size: ${baseSize}px; color: ${textColor}; font-weight: 600; text-align: center;"></p>
             </div>
 
             <form id="bookingForm" onsubmit="submitBooking(event)" class="space-y-4">
               <div>
-                <label for="customerName" style="font-family: ${fontFamily}; font-size: ${baseSize * 0.9}px; color: ${textColor}; display: block; margin-bottom: 8px; font-weight: 500;">نام و نام خانوادگی</label>
+                <label for="customerName" style="font-family: ${fontFamily}; font-size: ${baseSize * 0.9}px; color: ${textColor}; display: block; margin-bottom: 8px; font-weight: 500;">نام و ��ام خانوادگی</label>
                 <input type="text" id="customerName" name="customerName" required class="w-full px-4 py-3 rounded-lg" style="background: ${backgroundColor}; color: ${textColor}; border: 2px solid ${primaryColor}; font-family: ${fontFamily}; font-size: ${baseSize}px;" placeholder="نام خود را وارد کنید">
               </div>
 
@@ -457,5 +563,5 @@
       initAll();
     }
   </script>
- <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9b31a13d009a0e73',t:'MTc2NjU5NTM2My4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9b31c418a06ced53',t:'MTc2NjU5Njc5MS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
